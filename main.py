@@ -1,6 +1,6 @@
 # Online Grade Retrieval Server and Client
 # Using sockets and encryption
-# By Meena, Sama and Umar
+# By Sama, Yasmeen and Umar
 
 import socket
 import argparse
@@ -26,6 +26,9 @@ class Student:
     # All Accessor Methods
     def getName(self):
         return str(self.name)
+    
+    def getKey(self):
+        return str(self.key)
 
     def getLab1(self):
         return str(self.lab1)
@@ -46,7 +49,7 @@ class Student:
         return str((int(self.exam1) + int(self.exam2) + int(self.exam3) + int(self.exam4))/4)
     
     def getGrades(self):
-        return ("Lab 1: " + str(self.lab1) + "\nLab 2: "+ str(self.lab2) + "\nLab 3: "+ str(self.lab3) + 
+        return ("\nLab 1: " + str(self.lab1) + "\nLab 2: "+ str(self.lab2) + "\nLab 3: "+ str(self.lab3) + 
                 "\nLab 4: "+ str(self.lab4) + "\nMidterm: "+ str(self.midterm) + "\nExam 1: "+ str(self.exam1) + 
                 "\nExam 2: "+ str(self.exam2) + "\nExam 3: "+ str(self.exam3) + "\nExam 4: "+ str(self.exam4))
  
@@ -67,40 +70,71 @@ class Server:
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
         #self.server_socket.setblocking(False)
-        print(f"Listening for connections on port: {port}")
-        self.server_socket.listen()
-        conn, addr = self.server_socket.accept()
-        print(f"Connected by {addr}")
         
+        # Loop to keep finding new client connections
         while True:
-            data = conn.recv(1024)
-            data_decoded = data.decode('utf-8')
-            if(len(data_decoded) < 8):
-                response = "Welcome to the server portal user ID " + data_decoded
-                conn.sendall(response.encode('utf-8'))
-                continue
+            print(f"Listening for connections on port: {port}")
+            self.server_socket.listen()
+            conn, addr = self.server_socket.accept()
+            print(f"Connected by {addr}")
+            
+            # Continuously accept data until the data is empty
+            while True:
+                data = conn.recv(1024)
+                if data:
+                    data_decoded = data.decode('utf-8')
+                    # If the response is the student number, then respond back greeting the user, and continue the loop because
+                    # no other command is provided (skip all the if/elif)
+                    if(len(data_decoded) < 8 and (data_decoded in Server.server_dict.keys())):
+                        # Get the user information and create greeting message, encode into bytes
+                        currStudent = Server.server_dict.get(data_decoded)
+                        print("User found, successfully connected with " + currStudent.getName() + "'s profile")
+                        response = currStudent.getKey()
+                        response = response.encode('utf-8')
 
-            id, command = data_decoded.split(",")
-            currStudent = Server.server_dict[id]
-            grade = "empty"
-            print(command)
+                        # Send encryption key to client
+                        conn.sendall(response)
+                        continue
+                    elif(len(data_decoded) < 8 and (data_decoded not in Server.server_dict.keys())):
+                        # If the user is not found, print a message to the server log and close the socket server
+                        print("Incorrect Student ID")
+                        self.server_socket.close()
+                        break
+                    
+                    # When it is not just the student number
+                    id, command = data_decoded.split(",")
+                    currStudent = Server.server_dict.get(id)
 
-            if command == "GL1A":
-                grade = currStudent.getLab1()
-            elif command == "GL2A":
-                grade = currStudent.getLab2()
-            elif command == "GL3A":
-                grade = currStudent.getLab3()
-            elif command == "GL4A":
-                grade = currStudent.getLab4()
-            elif command == " GMA":
-                grade = currStudent.getMidterm()
-            elif command == "GEA":
-                grade = currStudent.getExam()
-            elif command == "GG":
-                grade = currStudent.getGrades()
+                    # Encrypt the message based on student cryptography key value
+                    encryption_key = currStudent.getKey()
+                    encryption_key_bytes = encryption_key.encode('utf-8')
+                    fernet = Fernet(encryption_key_bytes)
 
-            conn.sendall(grade.encode('utf-8'))
+                    grade = "empty"
+                    print(command)
+
+                    if command == "GL1A":
+                        grade = currStudent.getLab1()
+                    elif command == "GL2A":
+                        grade = currStudent.getLab2()
+                    elif command == "GL3A":
+                        grade = currStudent.getLab3()
+                    elif command == "GL4A":
+                        grade = currStudent.getLab4()
+                    elif command == "GMA":
+                        grade = currStudent.getMidterm()
+                    elif command == "GEA":
+                        grade = currStudent.getExam()
+                    elif command == "GG":
+                        grade = currStudent.getGrades()
+
+                    grade = grade.encode('utf-8')
+                    encrypted_message_bytes = fernet.encrypt(grade)
+
+                    conn.sendall(encrypted_message_bytes)
+                else:
+                    print("Connection closed from client:", addr)
+                    break
 
 
 class Client:
@@ -117,36 +151,47 @@ class Client:
     def __init__(self, host, port):
         print("We have created a Client object: ", self)  
         self.student_number = input("Enter your Student ID: ")
+        
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((host, port))
         self.client_socket.sendall(self.student_number.encode('utf-8'))
+        
         response = self.client_socket.recv(1024)
-        print(response.decode('utf-8'), end="\n\n")
+                
+        # Encrypt the message based on student cryptography key value
+        encryption_key_bytes = response
 
-        while True:
-            # prompt the student for a command
-            command = input('Enter a command: ')
+        fernet = Fernet(encryption_key_bytes)
+
+        
+        # prompt the student for a command
+        command = input('Enter a command: ')
+        
+        # echo the command
+        if command in Client.commandDict.keys():
+            print('Command entered:', command)
+            print(f"Fetching {Client.commandDict[command]}: ", end="")
             
-            # echo the command
-            if command:
-                print('Command entered:', command)
-                print(f"Fetching {Client.commandDict[command]}: ", end="")
-                message = self.student_number + "," + command
-                self.client_socket.sendall(message.encode('utf-8'))
-                output = self.client_socket.recv(1024)
-                print(output.decode('utf-8'))
-            else:
-                print('Invalid Command')
+            message = self.student_number + "," + command
+            self.client_socket.sendall(message.encode('utf-8'))
+            
+            output = self.client_socket.recv(1024)
+            decoded_output = fernet.decrypt(output)
+            print(decoded_output.decode('utf-8'))
+        else:
+            print('Invalid Command')
+
+        self.client_socket.close()
 
         
 if __name__ == '__main__':
     
     roles = {'client': Client,'server': Server}
     parser = argparse.ArgumentParser()
-
+    defaultHost = socket.gethostname()
     parser.add_argument('-r', '--role', choices=roles, help='Server or Client Role', required=True, type=str)
-    parser.add_argument('--host', default="127.0.0.1", help="Server Host", required=True, type=str)
-    parser.add_argument('--port', default=8080, help="Server Port", required=True, type=int)
+    parser.add_argument('--host', default=defaultHost, help="Server Host", type=str)
+    parser.add_argument('--port', default=8080, help="Server Port", type=int)
 
     args = parser.parse_args()
 
