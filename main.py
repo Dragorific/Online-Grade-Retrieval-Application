@@ -81,11 +81,13 @@ class Server:
             formatted_time = Client.time()
             
             print(f"{formatted_time}: Listening for connections on port: {port}")
+            # Try to see if the socket can listen, if it can't, it has been closed
             try:
                 self.server_socket.listen()
             except:
-                print("Server is closed")
+                print(f"{formatted_time}: Server socket {self} is closed from invalid student ID.")
                 break
+            
             conn, addr = self.server_socket.accept()
             formatted_time = Client.time()
             print(f"{formatted_time}: Connected by {addr}")
@@ -110,8 +112,9 @@ class Server:
                         # Send encryption key to client
                         conn.sendall(response)
                         continue
+
                     elif(len(data_decoded) < 8 and (data_decoded not in Server.server_dict.keys())):
-                        # If the user is not found, print a message to the server log and close the socket server
+                        # If the user is not found, print a message to the server log and close the socket server, as per requirements
                         print(formatted_time + ": Incorrect Student ID, server shutting down")
                         self.server_socket.close()
                         break
@@ -206,7 +209,7 @@ class Client:
 
             self.client_socket.close()
         else:
-            print("Invalid Student ID. Server is closed")
+            print(f"{formatted_time}: Invalid Student ID inputted, server has been closed.")
 
 
     def time():
