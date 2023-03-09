@@ -81,7 +81,11 @@ class Server:
             formatted_time = Client.time()
             
             print(f"{formatted_time}: Listening for connections on port: {port}")
-            self.server_socket.listen()
+            try:
+                self.server_socket.listen()
+            except:
+                print("Server is closed")
+                break
             conn, addr = self.server_socket.accept()
             formatted_time = Client.time()
             print(f"{formatted_time}: Connected by {addr}")
@@ -178,28 +182,32 @@ class Client:
         response = self.client_socket.recv(1024)
                 
         # Encrypt the message based on student cryptography key value
-        encryption_key_bytes = response
-        fernet = Fernet(encryption_key_bytes)
+        if response:
+            encryption_key_bytes = response
+            fernet = Fernet(encryption_key_bytes)
         
-        # prompt the student for a command
-        formatted_time = Client.time()
-        command = input(f'{formatted_time}: Enter a command: ')
-        
-        # echo the command
-        if command in Client.commandDict.keys():
-            print(f'{formatted_time}: Command entered:', command)
-            print(f"{formatted_time}: Fetching {Client.commandDict[command]}: ", end="")
+            # prompt the student for a command
+            formatted_time = Client.time()
+            command = input(f'{formatted_time}: Enter a command: ')
             
-            message = self.student_number + "," + command
-            self.client_socket.sendall(message.encode('utf-8'))
-            
-            output = self.client_socket.recv(1024)
-            decoded_output = fernet.decrypt(output)
-            print(decoded_output.decode('utf-8'))
-        else:
-            print(f'{formatted_time}: Invalid Command')
+            # echo the command
+            if command in Client.commandDict.keys():
+                print(f'{formatted_time}: Command entered:', command)
+                print(f"{formatted_time}: Fetching {Client.commandDict[command]}: ", end="")
+                
+                message = self.student_number + "," + command
+                self.client_socket.sendall(message.encode('utf-8'))
+                
+                output = self.client_socket.recv(1024)
+                decoded_output = fernet.decrypt(output)
+                print(decoded_output.decode('utf-8'))
+            else:
+                print(f'{formatted_time}: Invalid Command')
 
-        self.client_socket.close()
+            self.client_socket.close()
+        else:
+            print("Invalid Student ID. Server is closed")
+
 
     def time():
         return (datetime.datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
