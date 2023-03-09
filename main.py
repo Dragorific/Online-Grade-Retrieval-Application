@@ -6,9 +6,10 @@ import socket
 import argparse
 from cryptography.fernet import Fernet
 import csv
+import datetime
 
 class Student:
-    # Creating Student object/class
+    # Creating Student object/class to hold all the info
     def __init__(self, name, student_number, key, lab1, lab2, lab3, lab4, midterm, exam1, exam2, exam3, exam4):
         self.name = name
         self.student_num = student_number
@@ -52,15 +53,19 @@ class Student:
         return ("\nLab 1: " + str(self.lab1) + "\nLab 2: "+ str(self.lab2) + "\nLab 3: "+ str(self.lab3) + 
                 "\nLab 4: "+ str(self.lab4) + "\nMidterm: "+ str(self.midterm) + "\nExam 1: "+ str(self.exam1) + 
                 "\nExam 2: "+ str(self.exam2) + "\nExam 3: "+ str(self.exam3) + "\nExam 4: "+ str(self.exam4))
- 
+
+# Server class that runs a server constantly listening for client connections and commands  
 class Server:
     PORT = 8080
     server_dict = {}
 
     def __init__(self, host, port):
+        # Read through the csv file and each row creates a new student object
         with open('course_grades_2023.csv', 'r') as csvfile:
             reader = csv.reader(csvfile)
             for row in reader:
+                # Print out each line as per requirements
+                print(row)
                 Server.server_dict[row[1]] = Student(row[0], row[1], row[2], row[3], 
                                                      row[4], row[5], row[6], row[7], 
                                                      row[8], row[9], row[10], row[11])
@@ -69,26 +74,32 @@ class Server:
         self.port = port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
-        #self.server_socket.setblocking(False)
-        
+                
         # Loop to keep finding new client connections
         while True:
-            print(f"Listening for connections on port: {port}")
+            # Extract current system time
+            formatted_time = Client.time()
+            
+            print(f"{formatted_time}: Listening for connections on port: {port}")
             self.server_socket.listen()
             conn, addr = self.server_socket.accept()
-            print(f"Connected by {addr}")
+            formatted_time = Client.time()
+            print(f"{formatted_time}: Connected by {addr}")
             
             # Continuously accept data until the data is empty
             while True:
                 data = conn.recv(1024)
                 if data:
+                    # Extract current system time
+                    formatted_time = Client.time()
+
                     data_decoded = data.decode('utf-8')
                     # If the response is the student number, then respond back greeting the user, and continue the loop because
                     # no other command is provided (skip all the if/elif)
                     if(len(data_decoded) < 8 and (data_decoded in Server.server_dict.keys())):
                         # Get the user information and create greeting message, encode into bytes
                         currStudent = Server.server_dict.get(data_decoded)
-                        print("User found, successfully connected with " + currStudent.getName() + "'s profile")
+                        print(formatted_time + ": User found, successfully connected with " + currStudent.getName() + "'s profile")
                         response = currStudent.getKey()
                         response = response.encode('utf-8')
 
@@ -97,7 +108,7 @@ class Server:
                         continue
                     elif(len(data_decoded) < 8 and (data_decoded not in Server.server_dict.keys())):
                         # If the user is not found, print a message to the server log and close the socket server
-                        print("Incorrect Student ID")
+                        print(formatted_time + ": Incorrect Student ID, server shutting down")
                         self.server_socket.close()
                         break
                     
@@ -111,7 +122,8 @@ class Server:
                     fernet = Fernet(encryption_key_bytes)
 
                     grade = "empty"
-                    print(command)
+                    # Echo user command as per requirements
+                    print(f"{formatted_time}: User inputted <{command}>")
 
                     if command == "GL1A":
                         grade = currStudent.getLab1()
@@ -128,16 +140,19 @@ class Server:
                     elif command == "GG":
                         grade = currStudent.getGrades()
 
+                    # Encode the grade value into bytes and encrypt with user key
                     grade = grade.encode('utf-8')
                     encrypted_message_bytes = fernet.encrypt(grade)
-
+                    
+                    # Send the encrypted bytes over TCP
                     conn.sendall(encrypted_message_bytes)
                 else:
-                    print("Connection closed from client:", addr)
+                    print(f'{formatted_time}: Connection closed from client at: {addr}')
                     break
 
-
+# Client class that runs a client in the terminal to communicate with the server
 class Client:
+    # Dictionary holds all the command -> output pairings
     commandDict = {
         "GMA" : "Midterm Average",
         "GEA" : "Exam Average",
@@ -149,9 +164,13 @@ class Client:
     }
 
     def __init__(self, host, port):
-        print("We have created a Client object: ", self)  
-        self.student_number = input("Enter your Student ID: ")
+        formatted_time = Client.time()
+
+        print(f"{formatted_time}: We have created a Client object: {self}")  
+        self.student_number = input(f"{formatted_time}: Enter your Student ID: ")
         
+        formatted_time = Client.time()
+
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect((host, port))
         self.client_socket.sendall(self.student_number.encode('utf-8'))
@@ -160,17 +179,16 @@ class Client:
                 
         # Encrypt the message based on student cryptography key value
         encryption_key_bytes = response
-
         fernet = Fernet(encryption_key_bytes)
-
         
         # prompt the student for a command
-        command = input('Enter a command: ')
+        formatted_time = Client.time()
+        command = input(f'{formatted_time}: Enter a command: ')
         
         # echo the command
         if command in Client.commandDict.keys():
-            print('Command entered:', command)
-            print(f"Fetching {Client.commandDict[command]}: ", end="")
+            print(f'{formatted_time}: Command entered:', command)
+            print(f"{formatted_time}: Fetching {Client.commandDict[command]}: ", end="")
             
             message = self.student_number + "," + command
             self.client_socket.sendall(message.encode('utf-8'))
@@ -179,9 +197,12 @@ class Client:
             decoded_output = fernet.decrypt(output)
             print(decoded_output.decode('utf-8'))
         else:
-            print('Invalid Command')
+            print(f'{formatted_time}: Invalid Command')
 
         self.client_socket.close()
+
+    def time():
+        return (datetime.datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
         
 if __name__ == '__main__':
