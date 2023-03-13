@@ -32,22 +32,22 @@ class Student:
         return str(self.key)
 
     def getLab1(self):
-        return str(self.lab1)
+        return self.lab1
     
     def getLab2(self):
-        return str(self.lab2)
+        return self.lab2
     
     def getLab3(self):
-        return str(self.lab3)
+        return self.lab3
     
     def getLab4(self):
-        return str(self.lab4)
+        return self.lab4
     
     def getMidterm(self):
-        return str(self.midterm)
+        return self.midterm
     
     def getExam(self):
-        return str((int(self.exam1) + int(self.exam2) + int(self.exam3) + int(self.exam4))/4)
+        return (int(self.exam1) + int(self.exam2) + int(self.exam3) + int(self.exam4))/4
     
     def getGrades(self):
         return ("\nLab 1: " + str(self.lab1) + "\nLab 2: "+ str(self.lab2) + "\nLab 3: "+ str(self.lab3) + 
@@ -92,7 +92,7 @@ class Server:
             formatted_time = Client.time()
             print(f"{formatted_time}: Connected by {addr}")
             
-            # Continuously accept data until the data is empty
+            # Continuously accept data until the returned data is zero or empty
             while True:
                 data = conn.recv(1024)
                 if data:
@@ -105,7 +105,7 @@ class Server:
                     if(len(data_decoded) < 8 and (data_decoded in Server.server_dict.keys())):
                         # Get the user information and create greeting message, encode into bytes
                         currStudent = Server.server_dict.get(data_decoded)
-                        print(formatted_time + ": User found, successfully connected with " + currStudent.getName() + "'s profile")
+                        print(f"{formatted_time}: User found, successfully connected with " + currStudent.getName() + "'s profile")
                         response = currStudent.getKey()
                         response = response.encode('utf-8')
 
@@ -115,39 +115,69 @@ class Server:
 
                     elif(len(data_decoded) < 8 and (data_decoded not in Server.server_dict.keys())):
                         # If the user is not found, print a message to the server log and close the socket server, as per requirements
-                        print(formatted_time + ": Incorrect Student ID, server shutting down")
+                        print(f"{formatted_time}: Incorrect Student ID, server shutting down")
+                        self.server_socket.close()
+                        break
+                            
+                    try:
+                        id, command = data_decoded.split(",")
+                        currStudent = Server.server_dict.get(id)
+                        encryption_key = currStudent.getKey()
+                    except:
+                        print(f"{formatted_time}: Incorrect Student ID, server shutting down")
                         self.server_socket.close()
                         break
                     
                     # When it is not just the student number
-                    id, command = data_decoded.split(",")
-                    currStudent = Server.server_dict.get(id)
-
                     # Encrypt the message based on student cryptography key value
-                    encryption_key = currStudent.getKey()
                     encryption_key_bytes = encryption_key.encode('utf-8')
                     fernet = Fernet(encryption_key_bytes)
 
-                    grade = "empty"
                     # Echo user command as per requirements
                     print(f"{formatted_time}: User inputted <{command}>")
+                    grade = 0
 
                     if command == "GL1A":
-                        grade = currStudent.getLab1()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getLab1())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GL2A":
-                        grade = currStudent.getLab2()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getLab2())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GL3A":
-                        grade = currStudent.getLab3()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getLab3())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GL4A":
-                        grade = currStudent.getLab4()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getLab4())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GMA":
-                        grade = currStudent.getMidterm()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getMidterm())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GEA":
-                        grade = currStudent.getExam()
+                        for key in Server.server_dict.keys():
+                            currStudent = Server.server_dict.get(key)
+                            grade += int(currStudent.getExam())
+
+                        grade = grade / len(Server.server_dict.keys())
                     elif command == "GG":
-                        grade = currStudent.getGrades()
+                        grade = str(grade)[1:] + currStudent.getGrades()
 
                     # Encode the grade value into bytes and encrypt with user key
+                    grade = str(grade)
                     grade = grade.encode('utf-8')
                     encrypted_message_bytes = fernet.encrypt(grade)
                     
